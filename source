@@ -1,1473 +1,589 @@
---[=[
-    RbxScriptHub
-    by [RbxScript]
-    A comprehensive UI library for Roblox, designed to be feature-rich and user-friendly.
-]=]
+--[[
+	RBXScriptHub Lib
+	Custom UI Library for Roblox
+	Created by [Your Name]
+]]
 
-local RbxScriptHub = {
-    Themes = {
-        Dark = {
-            Background = Color3.fromRGB(25, 25, 25),
-            Topbar = Color3.fromRGB(34, 34, 34),
-            TextColor = Color3.fromRGB(240, 240, 240),
-            Accent = Color3.fromRGB(0, 146, 214),
-            ElementBackground = Color3.fromRGB(35, 35, 35),
-            ElementStroke = Color3.fromRGB(50, 50, 50),
-            ToggleOn = Color3.fromRGB(0, 146, 214),
-            ToggleOff = Color3.fromRGB(100, 100, 100),
-            SliderBackground = Color3.fromRGB(43, 105, 159),
-            InputBackground = Color3.fromRGB(30, 30, 30),
-            NotificationSuccess = Color3.fromRGB(40, 167, 69),
-            NotificationError = Color3.fromRGB(220, 53, 69),
-            NotificationInfo = Color3.fromRGB(0, 123, 255)
-        },
-        Light = {
-            Background = Color3.fromRGB(240, 240, 240),
-            Topbar = Color3.fromRGB(220, 220, 220),
-            TextColor = Color3.fromRGB(50, 50, 50),
-            Accent = Color3.fromRGB(0, 120, 215),
-            ElementBackground = Color3.fromRGB(220, 220, 220),
-            ElementStroke = Color3.fromRGB(180, 180, 180),
-            ToggleOn = Color3.fromRGB(0, 120, 215),
-            ToggleOff = Color3.fromRGB(160, 160, 160),
-            SliderBackground = Color3.fromRGB(0, 120, 215),
-            InputBackground = Color3.fromRGB(255, 255, 255),
-            NotificationSuccess = Color3.fromRGB(40, 167, 69),
-            NotificationError = Color3.fromRGB(220, 53, 69),
-            NotificationInfo = Color3.fromRGB(0, 123, 255)
-        }
-    },
-    Flags = {},
-    CurrentTheme = "Dark",
-    Connections = {},
-    Notifications = {}
-}
+local RBXScriptHubLib = {}
 
 -- Services
+local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
+
+-- Environment Check
+local isStudio = RunService:IsStudio()
+
+-- Configuration
+local ConfigurationFolder = "RBXScriptHub"
+local ConfigurationExtension = ".rsh"
+local debugMode = false
+
+-- Theme Definition
+RBXScriptHubLib.Themes = {
+	Default = {
+		Background = Color3.fromRGB(30, 30, 30),
+		Topbar = Color3.fromRGB(40, 40, 40),
+		TextColor = Color3.fromRGB(220, 220, 220),
+		ElementBackground = Color3.fromRGB(45, 45, 45),
+		ElementBackgroundHover = Color3.fromRGB(55, 55, 55),
+		ElementStroke = Color3.fromRGB(60, 60, 60),
+		ToggleEnabled = Color3.fromRGB(0, 120, 255),
+		ToggleDisabled = Color3.fromRGB(100, 100, 100),
+		SliderBackground = Color3.fromRGB(50, 50, 50),
+		SliderProgress = Color3.fromRGB(0, 120, 255),
+	},
+}
+
+-- Library State
+local currentTheme = RBXScriptHubLib.Themes.Default
+local flags = {}
+local hidden = false
+local debounce = false
+local configurationEnabled = false
+local configurationFileName = nil
 
 -- Utility Functions
-local function GenerateUUID()
-    return HttpService:GenerateGUID(false)
+local function logDebug(message)
+	if debugMode then
+		warn("[RBXScriptHub Lib] " .. message)
+	end
 end
 
-local function CreateRippleEffect(parent, position)
-    local Ripple = Instance.new("Frame")
-    Ripple.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].Accent
-    Ripple.BackgroundTransparency = 0.7
-    Ripple.Size = UDim2.new(0, 0, 0, 0)
-    Ripple.Position = position
-    Ripple.AnchorPoint = Vector2.new(0.5, 0.5)
-    Ripple.Parent = parent
-    Ripple.ZIndex = parent.ZIndex + 1
-
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(1, 0)
-    UICorner.Parent = Ripple
-
-    TweenService:Create(Ripple, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 100, 0, 100),
-        BackgroundTransparency = 1
-    }):Play()
-
-    task.delay(0.5, function()
-        Ripple:Destroy()
-    end)
+local function getSafeParent()
+	if gethui then
+		return gethui()
+	elseif syn and syn.protect_gui then
+		syn.protect_gui(RBXScriptHubLib.UI)
+		return CoreGui
+	else
+		return CoreGui:FindFirstChild("RobloxGui") or CoreGui
+	end
 end
 
--- Main GUI
-local RbxScriptHubUI = Instance.new("ScreenGui")
-RbxScriptHubUI.Name = "RbxScriptHubUI"
-RbxScriptHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-RbxScriptHubUI.IgnoreGuiInset = true
-
-if syn and syn.protect_gui then
-    syn.protect_gui(RbxScriptHubUI)
+local function saveConfiguration()
+	if not configurationEnabled or not configurationFileName then
+		return
+	end
+	logDebug("Saving configuration")
+	local data = {}
+	for flag, settings in pairs(flags) do
+		data[flag] = settings.CurrentValue
+	end
+	if writefile then
+		local success, err = pcall(function()
+			writefile(ConfigurationFolder .. "/" .. configurationFileName .. ConfigurationExtension, HttpService:JSONEncode(data))
+		end)
+		if not success then
+			warn("Failed to save configuration: " .. err)
+		end
+	end
 end
-RbxScriptHubUI.Parent = CoreGui
 
--- Notification Container
-local NotificationContainer = Instance.new("Frame")
-NotificationContainer.Name = "NotificationContainer"
-NotificationContainer.Size = UDim2.new(0, 300, 1, 0)
-NotificationContainer.Position = UDim2.new(1, -310, 0, 0)
-NotificationContainer.BackgroundTransparency = 1
-NotificationContainer.Parent = RbxScriptHubUI
+local function loadConfiguration()
+	if not configurationEnabled or not configurationFileName then
+		return
+	end
+	logDebug("Loading configuration")
+	local success, data = pcall(function()
+		if isStudio then
+			return HttpService:JSONDecode('{"Toggle1":true,"Slider1":50}')
+		elseif isfile and isfile(ConfigurationFolder .. "/" .. configurationFileName .. ConfigurationExtension) then
+			return HttpService:JSONDecode(readfile(ConfigurationFolder .. "/" .. configurationFileName .. ConfigurationExtension))
+		end
+	end)
+	if success and data then
+		for flag, value in pairs(data) do
+			if flags[flag] then
+				flags[flag]:Set(value)
+			end
+		end
+		RBXScriptHubLib:Notify("Configuration Loaded", "Loaded settings from previous session.")
+	else
+		RBXScriptHubLib:Notify("Configuration Error", "Failed to load configuration.")
+	end
+end
 
-local NotificationList = Instance.new("UIListLayout")
-NotificationList.SortOrder = Enum.SortOrder.LayoutOrder
-NotificationList.Padding = UDim.new(0, 10)
-NotificationList.VerticalAlignment = Enum.VerticalAlignment.Bottom
-NotificationList.Parent = NotificationContainer
+-- UI Setup
+local function createUI()
+	local ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "RBXScriptHubUI"
+	ScreenGui.DisplayOrder = 100
+	ScreenGui.Parent = getSafeParent()
 
--- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "Main"
-MainFrame.Size = UDim2.new(0, 500, 0, 450)
-MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.BackgroundColor3 = RbxScriptHub.Themes.Dark.Background
-MainFrame.ClipsDescendants = true
-MainFrame.Parent = RbxScriptHubUI
+	local Main = Instance.new("Frame")
+	Main.Size = UDim2.new(0, 400, 0, 300)
+	Main.Position = UDim2.new(0.5, -200, 0.5, -150)
+	Main.BackgroundColor3 = currentTheme.Background
+	Main.ClipsDescendants = true
+	Main.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = MainFrame
+	local UICorner = Instance.new("UICorner")
+	UICorner.CornerRadius = UDim.new(0, 8)
+	UICorner.Parent = Main
 
-local TopBar = Instance.new("Frame")
-TopBar.Name = "Topbar"
-TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.BackgroundColor3 = RbxScriptHub.Themes.Dark.Topbar
-TopBar.Parent = MainFrame
+	local Topbar = Instance.new("Frame")
+	Topbar.Size = UDim2.new(1, 0, 0, 40)
+	Topbar.BackgroundColor3 = currentTheme.Topbar
+	Topbar.Parent = Main
 
-local UICorner2 = Instance.new("UICorner")
-UICorner2.CornerRadius = UDim.new(0, 8)
-UICorner2.Parent = TopBar
+	local TopbarCorner = Instance.new("UICorner")
+	TopbarCorner.CornerRadius = UDim.new(0, 8)
+	TopbarCorner.Parent = Topbar
 
-local Title = Instance.new("TextLabel")
-Title.Name = "Title"
-Title.Text = "RbxScriptHub"
-Title.Font = Enum.Font.GothamSemibold
-Title.TextSize = 14
-Title.TextColor3 = RbxScriptHub.Themes.Dark.TextColor
-Title.BackgroundTransparency = 1
-Title.Size = UDim2.new(0, 100, 1, 0)
-Title.Position = UDim2.new(0, 15, 0, 0)
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(0, 200, 1, 0)
+	Title.Position = UDim2.new(0, 10, 0, 0)
+	Title.BackgroundTransparency = 1
+	Title.Text = "RBXScriptHub"
+	Title.TextColor3 = currentTheme.TextColor
+	Title.TextSize = 16
+	Title.Font = Enum.Font.SourceSansBold
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Topbar
 
-local CloseButton = Instance.new("ImageButton")
-CloseButton.Name = "Close"
-CloseButton.Image = "rbxassetid://3926305904"
-CloseButton.ImageRectOffset = Vector2.new(924, 724)
-CloseButton.ImageRectSize = Vector2.new(36, 36)
-CloseButton.Size = UDim2.new(0, 20, 0, 20)
-CloseButton.Position = UDim2.new(1, -30, 0.5, -10)
-CloseButton.AnchorPoint = Vector2.new(1, 0.5)
-CloseButton.BackgroundTransparency = 1
-CloseButton.Parent = TopBar
+	local HideButton = Instance.new("ImageButton")
+	HideButton.Size = UDim2.new(0, 24, 0, 24)
+	HideButton.Position = UDim2.new(1, -34, 0.5, -12)
+	HideButton.BackgroundTransparency = 1
+	HideButton.Image = "rbxassetid://3926305904"
+	HideButton.ImageRectOffset = Vector2.new(404, 284)
+	HideButton.ImageRectSize = Vector2.new(36, 36)
+	HideButton.Parent = Topbar
 
-local MinimizeButton = Instance.new("ImageButton")
-MinimizeButton.Name = "Minimize"
-MinimizeButton.Image = "rbxassetid://3926305904"
-MinimizeButton.ImageRectOffset = Vector2.new(964, 284)
-MinimizeButton.ImageRectSize = Vector2.new(36, 36)
-MinimizeButton.Size = UDim2.new(0, 20, 0, 20)
-MinimizeButton.Position = UDim2.new(1, -60, 0.5, -10)
-MinimizeButton.AnchorPoint = Vector2.new(1, 0.5)
-MinimizeButton.BackgroundTransparency = 1
-MinimizeButton.Parent = TopBar
+	local Elements = Instance.new("Frame")
+	Elements.Size = UDim2.new(1, -10, 1, -50)
+	Elements.Position = UDim2.new(0, 5, 0, 45)
+	Elements.BackgroundTransparency = 1
+	Elements.Parent = Main
 
-local ResizeButton = Instance.new("ImageButton")
-ResizeButton.Name = "Resize"
-ResizeButton.Image = "rbxassetid://3926305904"
-ResizeButton.ImageRectOffset = Vector2.new(404, 764)
-ResizeButton.ImageRectSize = Vector2.new(36, 36)
-ResizeButton.Size = UDim2.new(0, 20, 0, 20)
-ResizeButton.Position = UDim2.new(1, -10, 1, -10)
-ResizeButton.AnchorPoint = Vector2.new(1, 1)
-ResizeButton.BackgroundTransparency = 1
-ResizeButton.Parent = MainFrame
+	local UIListLayout = Instance.new("UIListLayout")
+	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	UIListLayout.Padding = UDim.new(0, 5)
+	UIListLayout.Parent = Elements
 
-local TabContainer = Instance.new("Frame")
-TabContainer.Name = "TabContainer"
-TabContainer.Size = UDim2.new(1, -20, 0, 30)
-TabContainer.Position = UDim2.new(0, 10, 0, 45)
-TabContainer.BackgroundTransparency = 1
-TabContainer.Parent = MainFrame
+	local Notifications = Instance.new("Frame")
+	Notifications.Size = UDim2.new(0, 300, 1, 0)
+	Notifications.Position = UDim2.new(1, -310, 0, 0)
+	Notifications.BackgroundTransparency = 1
+	Notifications.Parent = ScreenGui
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.FillDirection = Enum.FillDirection.Horizontal
-UIListLayout.Padding = UDim.new(0, 5)
-UIListLayout.Parent = TabContainer
+	local NotificationsLayout = Instance.new("UIListLayout")
+	NotificationsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	NotificationsLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	NotificationsLayout.Padding = UDim.new(0, 5)
+	NotificationsLayout.Parent = Notifications
 
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "Content"
-ContentFrame.Size = UDim2.new(1, -20, 1, -85)
-ContentFrame.Position = UDim2.new(0, 10, 0, 80)
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Parent = MainFrame
+	return ScreenGui, Main, Topbar, Elements, Notifications, HideButton
+end
 
-local UIPageLayout = Instance.new("UIPageLayout")
-UIPageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIPageLayout.EasingDirection = Enum.EasingDirection.InOut
-UIPageLayout.EasingStyle = Enum.EasingStyle.Quint
-UIPageLayout.TweenTime = 0.5
-UIPageLayout.Parent = ContentFrame
+-- Drag Functionality
+local function makeDraggable(frame)
+	local dragging = false
+	local dragInput, dragStart, startPos
 
--- Dragging Functionality
-local Dragging, DragInput, MousePos, FramePos
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        Dragging = true
-        MousePos = input.Position
-        FramePos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                Dragging = false
-            end
-        end)
-    end
-end)
+	local function updateInput(input)
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
 
-TopBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        DragInput = input
-    end
-end)
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if input == DragInput and Dragging then
-        local Delta = input.Position - MousePos
-        TweenService:Create(MainFrame, TweenInfo.new(0.1), {
-            Position = UDim2.new(FramePos.X.Scale, FramePos.X.Offset + Delta.X, FramePos.Y.Scale, FramePos.Y.Offset + Delta.Y)
-        }):Play()
-    end
-end)
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
 
--- Resizing Functionality
-local Resizing, ResizeInput, StartSize, StartPos
-ResizeButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        Resizing = true
-        MousePos = input.Position
-        StartSize = MainFrame.Size
-        StartPos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                Resizing = false
-            end
-        end)
-    end
-end)
-
-ResizeButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        ResizeInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == ResizeInput and Resizing then
-        local Delta = input.Position - MousePos
-        local NewWidth = math.clamp(StartSize.X.Offset + Delta.X, 300, 800)
-        local NewHeight = math.clamp(StartSize.Y.Offset + Delta.Y, 200, 600)
-        TweenService:Create(MainFrame, TweenInfo.new(0.1), {
-            Size = UDim2.new(0, NewWidth, 0, NewHeight)
-        }):Play()
-    end
-end)
-
--- Close Button Functionality
-CloseButton.MouseButton1Click:Connect(function()
-    for _, connection in pairs(RbxScriptHub.Connections) do
-        connection:Disconnect()
-    end
-    RbxScriptHubUI:Destroy()
-end)
-
--- Minimize Button Functionality
-local Minimized = false
-MinimizeButton.MouseButton1Click:Connect(function()
-    Minimized = not Minimized
-    if Minimized then
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
-            Size = UDim2.new(0, MainFrame.Size.X.Offset, 0, 40)
-        }):Play()
-        ContentFrame.Visible = false
-        TabContainer.Visible = false
-    else
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
-            Size = UDim2.new(0, MainFrame.Size.X.Offset, 0, 450)
-        }):Play()
-        ContentFrame.Visible = true
-        TabContainer.Visible = true
-    end
-end)
-
--- Theme Manager
-function RbxScriptHub:SetTheme(themeName)
-    if self.Themes[themeName] then
-        self.CurrentTheme = themeName
-        MainFrame.BackgroundColor3 = self.Themes[themeName].Background
-        TopBar.BackgroundColor3 = self.Themes[themeName].Topbar
-        Title.TextColor3 = self.Themes[themeName].TextColor
-        for _, tabButton in pairs(TabContainer:GetChildren()) do
-            if tabButton:IsA("TextButton") then
-                tabButton.TextColor3 = self.Themes[themeName].TextColor
-                tabButton.BackgroundColor3 = UIPageLayout.CurrentPage.Name == tabButton.Name and self.Themes[themeName].Accent or self.Themes[themeName].ElementBackground
-            end
-        end
-        for _, content in pairs(ContentFrame:GetChildren()) do
-            if content:IsA("ScrollingFrame") then
-                for _, element in pairs(content:GetChildren()) do
-                    if element:IsA("Frame") then
-                        element.BackgroundColor3 = self.Themes[themeName].ElementBackground
-                        for _, child in pairs(element:GetChildren()) do
-                            if child:IsA("TextLabel") or child:IsA("TextBox") then
-                                child.TextColor3 = self.Themes[themeName].TextColor
-                            elseif child:IsA("UIStroke") then
-                                child.Color = self.Themes[themeName].ElementStroke
-                            elseif child.Name == "ToggleFrame" then
-                                child.BackgroundColor3 = child.BackgroundColor3 == self.Themes[self.CurrentTheme].ToggleOn and self.Themes[themeName].ToggleOn or self.Themes[themeName].ToggleOff
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			updateInput(input)
+		end
+	end)
 end
 
 -- Notification System
-function RbxScriptHub:Notify(settings)
-    settings = settings or {}
-    local notification = Instance.new("Frame")
-    notification.Size = UDim2.new(1, -20, 0, 60)
-    notification.BackgroundColor3 = self.Themes[self.CurrentTheme].ElementBackground
-    notification.Parent = NotificationContainer
+function RBXScriptHubLib:Notify(title, content, duration)
+	duration = duration or 5
+	local notification = Instance.new("Frame")
+	notification.Size = UDim2.new(0, 280, 0, 60)
+	notification.BackgroundColor3 = currentTheme.Background
+	notification.BackgroundTransparency = 1
+	notification.Parent = RBXScriptHubLib.Notifications
 
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 6)
-    UICorner.Parent = notification
+	local UICorner = Instance.new("UICorner")
+	UICorner.CornerRadius = UDim.new(0, 6)
+	UICorner.Parent = notification
 
-    local UIStroke = Instance.new("UIStroke")
-    UIStroke.Color = self.Themes[self.CurrentTheme].ElementStroke
-    UIStroke.Thickness = 1
-    UIStroke.Parent = notification
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(1, -10, 0, 20)
+	Title.Position = UDim2.new(0, 5, 0, 5)
+	Title.BackgroundTransparency = 1
+	Title.Text = title
+	Title.TextColor3 = currentTheme.TextColor
+	Title.TextSize = 14
+	Title.Font = Enum.Font.SourceSansBold
+	Title.TextTransparency = 1
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = notification
 
-    local Title = Instance.new("TextLabel")
-    Title.Text = settings.Title or "Notification"
-    Title.Font = Enum.Font.GothamSemibold
-    Title.TextSize = 12
-    Title.TextColor3 = self.Themes[self.CurrentTheme].TextColor
-    Title.BackgroundTransparency = 1
-    Title.Size = UDim2.new(1, -20, 0, 20)
-    Title.Position = UDim2.new(0, 10, 0, 5)
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Parent = notification
+	local Content = Instance.new("TextLabel")
+	Content.Size = UDim2.new(1, -10, 0, 30)
+	Content.Position = UDim2.new(0, 5, 0, 25)
+	Content.BackgroundTransparency = 1
+	Content.Text = content
+	Content.TextColor3 = currentTheme.TextColor
+	Content.TextSize = 12
+	Content.Font = Enum.Font.SourceSans
+	Content.TextTransparency = 1
+	Content.TextXAlignment = Enum.TextXAlignment.Left
+	Content.TextWrapped = true
+	Content.Parent = notification
 
-    local Description = Instance.new("TextLabel")
-    Description.Text = settings.Description or ""
-    Description.Font = Enum.Font.Gotham
-    Description.TextSize = 11
-    Description.TextColor3 = self.Themes[self.CurrentTheme].TextColor
-    Description.BackgroundTransparency = 1
-    Description.Size = UDim2.new(1, -20, 0, 20)
-    Description.Position = UDim2.new(0, 10, 0, 25)
-    Description.TextXAlignment = Enum.TextXAlignment.Left
-    Description.TextWrapped = true
-    Description.Parent = notification
+	notification.Visible = true
+	TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.5}):Play()
+	TweenService:Create(Title, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency = 0}):Play()
+	TweenService:Create(Content, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency = 0}):Play()
 
-    local Indicator = Instance.new("Frame")
-    Indicator.Size = UDim2.new(0, 5, 1, -10)
-    Indicator.Position = UDim2.new(0, 5, 0, 5)
-    Indicator.BackgroundColor3 = settings.Type == "Success" and self.Themes[self.CurrentTheme].NotificationSuccess or
-                               settings.Type == "Error" and self.Themes[self.CurrentTheme].NotificationError or
-                               self.Themes[self.CurrentTheme].NotificationInfo
-    Indicator.Parent = notification
-
-    local UICorner2 = Instance.new("UICorner")
-    UICorner2.CornerRadius = UDim.new(0, 3)
-    UICorner2.Parent = Indicator
-
-    notification.BackgroundTransparency = 1
-    TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {BackgroundTransparency = 0}):Play()
-
-    task.delay(settings.Duration or 5, function()
-        TweenService:Create(notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
-        task.delay(0.3, function()
-            notification:Destroy()
-        end)
-    end)
+	task.delay(duration, function()
+		TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
+		TweenService:Create(Title, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency = 1}):Play()
+		TweenService:Create(Content, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency = 1}):Play()
+		task.wait(0.5)
+		notification:Destroy()
+	end)
 end
 
--- Tab Functions
-function RbxScriptHub:CreateWindow(settings)
-    settings = settings or {}
-    Title.Text = settings.Name or "RbxScriptHub"
-    
-    local Window = {}
-    
-    function Window:CreateTab(name, icon)
-        local TabButton = Instance.new("TextButton")
-        TabButton.Name = name
-        TabButton.Text = name
-        TabButton.Font = Enum.Font.Gotham
-        TabButton.TextSize = 12
-        TabButton.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-        TabButton.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-        TabButton.AutoButtonColor = false
-        TabButton.Size = UDim2.new(0, 80, 1, 0)
-        
-        local UICorner = Instance.new("UICorner")
-        UICorner.CornerRadius = UDim.new(0, 6)
-        UICorner.Parent = TabButton
-        
-        TabButton.Parent = TabContainer
-        
-        local TabContent = Instance.new("ScrollingFrame")
-        TabContent.Name = name
-        TabContent.Size = UDim2.new(1, 0, 1, 0)
-        TabContent.BackgroundTransparency = 1
-        TabContent.ScrollBarThickness = 3
-        TabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        TabContent.CanvasSize = UDim2.new(0, 0, 0, 0)
-        TabContent.ScrollingDirection = Enum.ScrollingDirection.Y
-        TabContent.Parent = ContentFrame
-        
-        local UIListLayout = Instance.new("UIListLayout")
-        UIListLayout.Padding = UDim.new(0, 10)
-        UIListLayout.Parent = TabContent
-        
-        local firstTab = #ContentFrame:GetChildren() == 1
-        
-        TabButton.MouseButton1Click:Connect(function()
-            UIPageLayout:JumpTo(TabContent)
-            for _, btn in pairs(TabContainer:GetChildren()) do
-                if btn:IsA("TextButton") then
-                    TweenService:Create(btn, TweenInfo.new(0.2), {
-                        BackgroundColor3 = btn == TabButton and RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].Accent or RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-                    }):Play()
-                end
-            end
-            CreateRippleEffect(TabButton, UDim2.new(0.5, 0, 0.5, 0))
-        end)
-        
-        if firstTab then
-            UIPageLayout:JumpTo(TabContent)
-            TabButton.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].Accent
-        end
-        
-        local Tab = {}
-        
-        function Tab:CreateButton(settings)
-            local Button = Instance.new("Frame")
-            Button.Name = settings.Name or "Button"
-            Button.Size = UDim2.new(1, 0, 0, 40)
-            Button.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Button.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Button
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Button
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Button"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(1, -20, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Button
-            
-            local ButtonEffect = Instance.new("TextButton")
-            ButtonEffect.Name = "ButtonEffect"
-            ButtonEffect.Text = ""
-            ButtonEffect.BackgroundTransparency = 1
-            ButtonEffect.Size = UDim2.new(1, 0, 1, 0)
-            ButtonEffect.Parent = Button
-            
-            ButtonEffect.MouseButton1Click:Connect(function()
-                CreateRippleEffect(Button, UDim2.new(0.5, 0, 0.5, 0))
-                local success, err = pcall(settings.Callback)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Button callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end)
-            
-            ButtonEffect.MouseEnter:Connect(function()
-                TweenService:Create(Button, TweenInfo.new(0.2), {
-                    BackgroundColor3 = Color3.fromRGB(
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.R * 255 + 10,
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.G * 255 + 10,
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.B * 255 + 10
-                    )
-                }):Play()
-            end)
-            
-            ButtonEffect.MouseLeave:Connect(function()
-                TweenService:Create(Button, TweenInfo.new(0.2), {
-                    BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-                }):Play()
-            end)
-            
-            local ButtonFuncs = {}
-            
-            function ButtonFuncs:Set(newText)
-                Title.Text = newText
-            end
-            
-            return ButtonFuncs
-        end
-        
-        function Tab:CreateToggle(settings)
-            local Toggle = Instance.new("Frame")
-            Toggle.Name = settings.Name or "Toggle"
-            Toggle.Size = UDim2.new(1, 0, 0, 40)
-            Toggle.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Toggle.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Toggle
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Toggle
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Toggle"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(0.7, -10, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Toggle
-            
-            local ToggleFrame = Instance.new("Frame")
-            ToggleFrame.Name = "ToggleFrame"
-            ToggleFrame.Size = UDim2.new(0, 40, 0, 20)
-            ToggleFrame.Position = UDim2.new(1, -50, 0.5, -10)
-            ToggleFrame.AnchorPoint = Vector2.new(1, 0.5)
-            ToggleFrame.BackgroundColor3 = settings.CurrentValue and RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOn or RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOff
-            ToggleFrame.Parent = Toggle
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 10)
-            UICorner2.Parent = ToggleFrame
-            
-            local ToggleButton = Instance.new("Frame")
-            ToggleButton.Name = "ToggleButton"
-            ToggleButton.Size = UDim2.new(0, 16, 0, 16)
-            ToggleButton.Position = settings.CurrentValue and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-            ToggleButton.AnchorPoint = Vector2.new(1, 0.5)
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            ToggleButton.Parent = ToggleFrame
-            
-            local UICorner3 = Instance.new("UICorner")
-            UICorner3.CornerRadius = UDim.new(0, 8)
-            UICorner3.Parent = ToggleButton
-            
-            local ToggleEffect = Instance.new("TextButton")
-            ToggleEffect.Name = "ToggleEffect"
-            ToggleEffect.Text = ""
-            ToggleEffect.BackgroundTransparency = 1
-            ToggleEffect.Size = UDim2.new(1, 0, 1, 0)
-            ToggleEffect.Parent = Toggle
-            
-            local currentValue = settings.CurrentValue or false
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-            
-            ToggleEffect.MouseButton1Click:Connect(function()
-                currentValue = not currentValue
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                
-                if currentValue then
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-                        Position = UDim2.new(1, -18, 0.5, -8)
-                    }):Play()
-                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
-                        BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOn
-                    }):Play()
-                else
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-                        Position = UDim2.new(0, 2, 0.5, -8)
-                    }):Play()
-                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
-                        BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOff
-                    }):Play()
-                end
-                
-                local success, err = pcall(settings.Callback, currentValue)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Toggle callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end)
-            
-            ToggleEffect.MouseEnter:Connect(function()
-                TweenService:Create(Toggle, TweenInfo.new(0.2), {
-                    BackgroundColor3 = Color3.fromRGB(
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.R * 255 + 10,
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.G * 255 + 10,
-                        RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground.B * 255 + 10
-                    )
-                }):Play()
-            end)
-            
-            ToggleEffect.MouseLeave:Connect(function()
-                TweenService:Create(Toggle, TweenInfo.new(0.2), {
-                    BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-                }):Play()
-            end)
-            
-            local ToggleFuncs = {}
-            
-            function ToggleFuncs:Set(newValue)
-                currentValue = newValue
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                
-                if currentValue then
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-                        Position = UDim2.new(1, -18, 0.5, -8)
-                    }):Play()
-                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
-                        BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOn
-                    }):Play()
-                else
-                    TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-                        Position = UDim2.new(0, 2, 0.5, -8)
-                    }):Play()
-                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
-                        BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ToggleOff
-                    }):Play()
-                end
-                
-                local success, err = pcall(settings.Callback, currentValue)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Toggle callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            return ToggleFuncs
-        end
-        
-        function Tab:CreateLabel(text)
-            local Label = Instance.new("Frame")
-            Label.Name = "Label"
-            Label.Size = UDim2.new(1, 0, 0, 30)
-            Label.BackgroundTransparency = 1
-            Label.Parent = TabContent
-            
-            local TextLabel = Instance.new("TextLabel")
-            TextLabel.Name = "Text"
-            TextLabel.Text = text
-            TextLabel.Font = Enum.Font.Gotham
-            TextLabel.TextSize = 12
-            TextLabel.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.Size = UDim2.new(1, -20, 1, 0)
-            TextLabel.Position = UDim2.new(0, 10, 0, 0)
-            TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-            TextLabel.Parent = Label
-            
-            local LabelFuncs = {}
-            
-            function LabelFuncs:Set(newText)
-                TextLabel.Text = newText
-            end
-            
-            return LabelFuncs
-        end
-        
-        function Tab:CreateDropdown(settings)
-            local Dropdown = Instance.new("Frame")
-            Dropdown.Name = settings.Name or "Dropdown"
-            Dropdown.Size = UDim2.new(1, 0, 0, 40)
-            Dropdown.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Dropdown.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Dropdown
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Dropdown
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Dropdown"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(0.7, -10, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Dropdown
-            
-            local DropdownButton = Instance.new("TextButton")
-            DropdownButton.Name = "DropdownButton"
-            DropdownButton.Text = settings.CurrentOption or settings.Options[1] or "Select"
-            DropdownButton.Font = Enum.Font.Gotham
-            DropdownButton.TextSize = 12
-            DropdownButton.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            DropdownButton.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-            DropdownButton.Size = UDim2.new(0, 100, 0, 20)
-            DropdownButton.Position = UDim2.new(1, -110, 0.5, -10)
-            DropdownButton.AnchorPoint = Vector2.new(1, 0.5)
-            DropdownButton.Parent = Dropdown
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 6)
-            UICorner2.Parent = DropdownButton
-            
-            local DropdownList = Instance.new("Frame")
-            DropdownList.Name = "DropdownList"
-            DropdownList.Size = UDim2.new(0, 100, 0, 0)
-            DropdownList.Position = UDim2.new(1, -110, 0.5, 10)
-            DropdownList.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-            DropdownList.ClipsDescendants = true
-            DropdownList.Visible = false
-            DropdownList.Parent = Dropdown
-            
-            local UICorner3 = Instance.new("UICorner")
-            UICorner3.CornerRadius = UDim.new(0, 6)
-            UICorner3.Parent = DropdownList
-            
-            local UIListLayout2 = Instance.new("UIListLayout")
-            UIListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
-            UIListLayout2.Parent = DropdownList
-            
-            local currentOption = settings.CurrentOption or settings.Options[1]
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentOption
-            
-            local function UpdateList()
-                for _, child in pairs(DropdownList:GetChildren()) do
-                    if child:IsA("TextButton") then
-                        child:Destroy()
-                    end
-                end
-                for i, option in ipairs(settings.Options or {}) do
-                    local OptionButton = Instance.new("TextButton")
-                    OptionButton.Text = tostring(option)
-                    OptionButton.Font = Enum.Font.Gotham
-                    OptionButton.TextSize = 12
-                    OptionButton.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-                    OptionButton.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-                    OptionButton.Size = UDim2.new(1, 0, 0, 20)
-                    OptionButton.Parent = DropdownList
-                    
-                    OptionButton.MouseButton1Click:Connect(function()
-                        currentOption = option
-                        RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentOption
-                        DropdownButton.Text = tostring(option)
-                        DropdownList.Visible = false
-                        TweenService:Create(DropdownList, TweenInfo.new(0.2), {Size = UDim2.new(0, 100, 0, 0)}):Play()
-                        local success, err = pcall(settings.Callback, currentOption)
-                        if not success then
-                            RbxScriptHub:Notify({
-                                Title = "Error",
-                                Description = "Dropdown callback error: " .. tostring(err),
-                                Type = "Error",
-                                Duration = 5
-                            })
-                        end
-                    end)
-                end
-                DropdownList.Size = UDim2.new(0, 100, 0, math.min(#settings.Options * 20, 100))
-            end
-            
-            UpdateList()
-            
-            DropdownButton.MouseButton1Click:Connect(function()
-                DropdownList.Visible = not DropdownList.Visible
-                if DropdownList.Visible then
-                    TweenService:Create(DropdownList, TweenInfo.new(0.2), {Size = UDim2.new(0, 100, 0, math.min(#settings.Options * 20, 100))}):Play()
-                else
-                    TweenService:Create(DropdownList, TweenInfo.new(0.2), {Size = UDim2.new(0, 100, 0, 0)}):Play()
-                end
-            end)
-            
-            local DropdownFuncs = {}
-            
-            function DropdownFuncs:Set(newOption)
-                if table.find(settings.Options, newOption) then
-                    currentOption = newOption
-                    RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentOption
-                    DropdownButton.Text = tostring(newOption)
-                    local success, err = pcall(settings.Callback, currentOption)
-                    if not success then
-                        RbxScriptHub:Notify({
-                            Title = "Error",
-                            Description = "Dropdown callback error: " .. tostring(err),
-                            Type = "Error",
-                            Duration = 5
-                        })
-                    end
-                end
-            end
-            
-            function DropdownFuncs:UpdateOptions(newOptions)
-                settings.Options = newOptions
-                UpdateList()
-            end
-            
-            return DropdownFuncs
-        end
-        
-        function Tab:CreateSlider(settings)
-            local Slider = Instance.new("Frame")
-            Slider.Name = settings.Name or "Slider"
-            Slider.Size = UDim2.new(1, 0, 0, 60)
-            Slider.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Slider.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Slider
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Slider
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Slider"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(1, -20, 0, 20)
-            Title.Position = UDim2.new(0, 10, 0, 5)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Slider
-            
-            local SliderBar = Instance.new("Frame")
-            SliderBar.Name = "SliderBar"
-            SliderBar.Size = UDim2.new(1, -20, 0, 10)
-            SliderBar.Position = UDim2.new(0, 10, 0, 35)
-            SliderBar.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].SliderBackground
-            SliderBar.Parent = Slider
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 5)
-            UICorner2.Parent = SliderBar
-            
-            local SliderFill = Instance.new("Frame")
-            SliderFill.Name = "SliderFill"
-            SliderFill.Size = UDim2.new(0, 0, 1, 0)
-            SliderFill.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].Accent
-            SliderFill.Parent = SliderBar
-            
-            local UICorner3 = Instance.new("UICorner")
-            UICorner3.CornerRadius = UDim.new(0, 5)
-            UICorner3.Parent = SliderFill
-            
-            local SliderHandle = Instance.new("Frame")
-            SliderHandle.Name = "SliderHandle"
-            SliderHandle.Size = UDim2.new(0, 16, 0, 16)
-            SliderHandle.Position = UDim2.new(0, 0, 0.5, -8)
-            SliderHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            SliderHandle.Parent = SliderBar
-            
-            local UICorner4 = Instance.new("UICorner")
-            UICorner4.CornerRadius = UDim.new(0, 8)
-            UICorner4.Parent = SliderHandle
-            
-            local ValueLabel = Instance.new("TextLabel")
-            ValueLabel.Name = "Value"
-            ValueLabel.Text = tostring(settings.CurrentValue or settings.Min)
-            ValueLabel.Font = Enum.Font.Gotham
-            ValueLabel.TextSize = 12
-            ValueLabel.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            ValueLabel.BackgroundTransparency = 1
-            ValueLabel.Size = UDim2.new(0, 50, 0, 20)
-            ValueLabel.Position = UDim2.new(1, -60, 0, 5)
-            ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-            ValueLabel.Parent = Slider
-            
-            local currentValue = settings.CurrentValue or settings.Min
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-            
-            local function UpdateSlider(input)
-                local relativeX = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
-                currentValue = settings.Min + (settings.Max - settings.Min) * relativeX
-                currentValue = math.round(currentValue / (settings.Increment or 1)) * (settings.Increment or 1)
-                ValueLabel.Text = tostring(currentValue)
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                TweenService:Create(SliderFill, TweenInfo.new(0.1), {
-                    Size = UDim2.new(relativeX, 0, 1, 0)
-                }):Play()
-                TweenService:Create(SliderHandle, TweenInfo.new(0.1), {
-                    Position = UDim2.new(relativeX, -8, 0.5, -8)
-                }):Play()
-                local success, err = pcall(settings.Callback, currentValue)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Slider callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            local DraggingSlider = false
-            SliderBar.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingSlider = true
-                    UpdateSlider(input)
-                end
-            end)
-            
-            SliderBar.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingSlider = false
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if DraggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    UpdateSlider(input)
-                end
-            end)
-            
-            -- Initialize Slider
-            local initialRelative = (currentValue - settings.Min) / (settings.Max - settings.Min)
-            SliderFill.Size = UDim2.new(initialRelative, 0, 1, 0)
-            SliderHandle.Position = UDim2.new(initialRelative, -8, 0.5, -8)
-            
-            local SliderFuncs = {}
-            
-            function SliderFuncs:Set(newValue)
-                newValue = math.clamp(newValue, settings.Min, settings.Max)
-                newValue = math.round(newValue / (settings.Increment or 1)) * (settings.Increment or 1)
-                currentValue = newValue
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                ValueLabel.Text = tostring(currentValue)
-                local relative = (currentValue - settings.Min) / (settings.Max - settings.Min)
-                TweenService:Create(SliderFill, TweenInfo.new(0.1), {
-                    Size = UDim2.new(relative, 0, 1, 0)
-                }):Play()
-                TweenService:Create(SliderHandle, TweenInfo.new(0.1), {
-                    Position = UDim2.new(relative, -8, 0.5, -8)
-                }):Play()
-                local success, err = pcall(settings.Callback, currentValue)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Slider callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            return SliderFuncs
-        end
-        
-        function Tab:CreateKeybind(settings)
-            local Keybind = Instance.new("Frame")
-            Keybind.Name = settings.Name or "Keybind"
-            Keybind.Size = UDim2.new(1, 0, 0, 40)
-            Keybind.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Keybind.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Keybind
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Keybind
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Keybind"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(0.7, -10, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Keybind
-            
-            local KeybindButton = Instance.new("TextButton")
-            KeybindButton.Name = "KeybindButton"
-            KeybindButton.Text = settings.CurrentKey or "None"
-            KeybindButton.Font = Enum.Font.Gotham
-            KeybindButton.TextSize = 12
-            KeybindButton.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            KeybindButton.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-            KeybindButton.Size = UDim2.new(0, 60, 0, 20)
-            KeybindButton.Position = UDim2.new(1, -70, 0.5, -10)
-            KeybindButton.AnchorPoint = Vector2.new(1, 0.5)
-            KeybindButton.Parent = Keybind
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 6)
-            UICorner2.Parent = KeybindButton
-            
-            local currentKey = settings.CurrentKey or "None"
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentKey
-            local binding = false
-            
-            KeybindButton.MouseButton1Click:Connect(function()
-                binding = true
-                KeybindButton.Text = "..."
-            end)
-            
-            table.insert(RbxScriptHub.Connections, UserInputService.InputBegan:Connect(function(input)
-                if binding then
-                    local key = input.KeyCode.Name ~= "Unknown" and input.KeyCode.Name or input.UserInputType.Name
-                    if key ~= "MouseMovement" and key ~= "MouseWheel" then
-                        currentKey = key
-                        RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentKey
-                        KeybindButton.Text = key
-                        binding = false
-                        local success, err = pcall(settings.Callback, currentKey)
-                        if not success then
-                            RbxScriptHub:Notify({
-                                Title = "Error",
-                                Description = "Keybind callback error: " .. tostring(err),
-                                Type = "Error",
-                                Duration = 5
-                            })
-                        end
-                    end
-                elseif currentKey ~= "None" and input.KeyCode.Name == currentKey or input.UserInputType.Name == currentKey then
-                    local success, err = pcall(settings.Callback, currentKey)
-                    if not success then
-                        RbxScriptHub:Notify({
-                            Title = "Error",
-                            Description = "Keybind callback error: " .. tostring(err),
-                            Type = "Error",
-                            Duration = 5
-                        })
-                    end
-                end
-            end))
-            
-            local KeybindFuncs = {}
-            
-            function KeybindFuncs:Set(newKey)
-                currentKey = newKey
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentKey
-                KeybindButton.Text = newKey
-                local success, err = pcall(settings.Callback, currentKey)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Keybind callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            return KeybindFuncs
-        end
-        
-        function Tab:CreateColorPicker(settings)
-            local ColorPicker = Instance.new("Frame")
-            ColorPicker.Name = settings.Name or "ColorPicker"
-            ColorPicker.Size = UDim2.new(1, 0, 0, 40)
-            ColorPicker.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            ColorPicker.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = ColorPicker
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = ColorPicker
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "ColorPicker"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(0.7, -10, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = ColorPicker
-            
-            local ColorPreview = Instance.new("Frame")
-            ColorPreview.Name = "ColorPreview"
-            ColorPreview.Size = UDim2.new(0, 20, 0, 20)
-            ColorPreview.Position = UDim2.new(1, -50, 0.5, -10)
-            ColorPreview.BackgroundColor3 = settings.CurrentColor or Color3.fromRGB(255, 255, 255)
-            ColorPreview.Parent = ColorPicker
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 4)
-            UICorner2.Parent = ColorPreview
-            
-            local ColorPickerButton = Instance.new("TextButton")
-            ColorPickerButton.Name = "ColorPickerButton"
-            ColorPickerButton.Text = ""
-            ColorPickerButton.BackgroundTransparency = 1
-            ColorPickerButton.Size = UDim2.new(0, 20, 0, 20)
-            ColorPickerButton.Position = UDim2.new(1, -50, 0.5, -10)
-            ColorPickerButton.Parent = ColorPicker
-            
-            local ColorPickerFrame = Instance.new("Frame")
-            ColorPickerFrame.Name = "ColorPickerFrame"
-            ColorPickerFrame.Size = UDim2.new(0, 150, 0, 150)
-            ColorPickerFrame.Position = UDim2.new(1, -160, 0.5, 10)
-            ColorPickerFrame.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-            ColorPickerFrame.Visible = false
-            ColorPickerFrame.Parent = ColorPicker
-            
-            local UICorner3 = Instance.new("UICorner")
-            UICorner3.CornerRadius = UDim.new(0, 6)
-            UICorner3.Parent = ColorPickerFrame
-            
-            -- Simplified Color Picker (RGB Sliders)
-            local RSlider = Instance.new("Frame")
-            RSlider.Size = UDim2.new(1, -20, 0, 20)
-            RSlider.Position = UDim2.new(0, 10, 0, 10)
-            RSlider.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
-            RSlider.Parent = ColorPickerFrame
-            
-            local RFill = Instance.new("Frame")
-            RFill.Size = UDim2.new(0, 0, 1, 0)
-            RFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            RFill.Parent = RSlider
-            
-            local GSlider = Instance.new("Frame")
-            GSlider.Size = UDim2.new(1, -20, 0, 20)
-            GSlider.Position = UDim2.new(0, 10, 0, 40)
-            GSlider.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-            GSlider.Parent = ColorPickerFrame
-            
-            local GFill = Instance.new("Frame")
-            GFill.Size = UDim2.new(0, 0, 1, 0)
-            GFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            GFill.Parent = GSlider
-            
-            local BSlider = Instance.new("Frame")
-            BSlider.Size = UDim2.new(1, -20, 0, 20)
-            BSlider.Position = UDim2.new(0, 10, 0, 70)
-            BSlider.BackgroundColor3 = Color3.fromRGB(0, 0, 100)
-            BSlider.Parent = ColorPickerFrame
-            
-            local BFill = Instance.new("Frame")
-            BFill.Size = UDim2.new(0, 0, 1, 0)
-            BFill.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
-            BFill.Parent = BSlider
-            
-            local currentColor = settings.CurrentColor or Color3.fromRGB(255, 255, 255)
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentColor
-            
-            local function UpdateColor()
-                ColorPreview.BackgroundColor3 = currentColor
-                RFill.Size = UDim2.new(currentColor.R, 0, 1, 0)
-                GFill.Size = UDim2.new(currentColor.G, 0, 1, 0)
-                BFill.Size = UDim2.new(currentColor.B, 0, 1, 0)
-                local success, err = pcall(settings.Callback, currentColor)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "ColorPicker callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            local function UpdateSlider(slider, fill, input)
-                local relativeX = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
-                fill.Size = UDim2.new(relativeX, 0, 1, 0)
-                currentColor = Color3.new(
-                    RFill.Size.X.Scale,
-                    GFill.Size.X.Scale,
-                    BFill.Size.X.Scale
-                )
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentColor
-                UpdateColor()
-            end
-            
-            local DraggingR, DraggingG, DraggingB = false, false, false
-            RSlider.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingR = true
-                    UpdateSlider(RSlider, RFill, input)
-                end
-            end)
-            RSlider.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingR = false
-                end
-            end)
-            
-            GSlider.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingG = true
-                    UpdateSlider(GSlider, GFill, input)
-                end
-            end)
-            GSlider.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingG = false
-                end
-            end)
-            
-            BSlider.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingB = true
-                    UpdateSlider(BSlider, BFill, input)
-                end
-            end)
-            BSlider.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    DraggingB = false
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement then
-                    if DraggingR then
-                        UpdateSlider(RSlider, RFill, input)
-                    elseif DraggingG then
-                        UpdateSlider(GSlider, GFill, input)
-                    elseif DraggingB then
-                        UpdateSlider(BSlider, BFill, input)
-                    end
-                end
-            end)
-            
-            ColorPickerButton.MouseButton1Click:Connect(function()
-                ColorPickerFrame.Visible = not ColorPickerFrame.Visible
-            end)
-            
-            -- Initialize Color
-            RFill.Size = UDim2.new(currentColor.R, 0, 1, 0)
-            GFill.Size = UDim2.new(currentColor.G, 0, 1, 0)
-            BFill.Size = UDim2.new(currentColor.B, 0, 1, 0)
-            UpdateColor()
-            
-            local ColorPickerFuncs = {}
-            
-            function ColorPickerFuncs:Set(newColor)
-                currentColor = newColor
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentColor
-                RFill.Size = UDim2.new(newColor.R, 0, 1, 0)
-                GFill.Size = UDim2.new(newColor.G, 0, 1, 0)
-                BFill.Size = UDim2.new(newColor.B, 0, 1, 0)
-                UpdateColor()
-            end
-            
-            return ColorPickerFuncs
-        end
-        
-        function Tab:CreateInput(settings)
-            local Input = Instance.new("Frame")
-            Input.Name = settings.Name or "Input"
-            Input.Size = UDim2.new(1, 0, 0, 40)
-            Input.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            Input.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = Input
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = Input
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "Input"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(0.7, -10, 1, 0)
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = Input
-            
-            local InputBox = Instance.new("TextBox")
-            InputBox.Name = "InputBox"
-            InputBox.Text = settings.CurrentValue or ""
-            InputBox.Font = Enum.Font.Gotham
-            InputBox.TextSize = 12
-            InputBox.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            InputBox.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].InputBackground
-            InputBox.Size = UDim2.new(0, 100, 0, 20)
-            InputBox.Position = UDim2.new(1, -110, 0.5, -10)
-            InputBox.AnchorPoint = Vector2.new(1, 0.5)
-            InputBox.Parent = Input
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 6)
-            UICorner2.Parent = InputBox
-            
-            local currentValue = settings.CurrentValue or ""
-            RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-            
-            InputBox.FocusLost:Connect(function(enterPressed)
-                if enterPressed then
-                    currentValue = InputBox.Text
-                    RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                    local success, err = pcall(settings.Callback, currentValue)
-                    if not success then
-                        RbxScriptHub:Notify({
-                            Title = "Error",
-                            Description = "Input callback error: " .. tostring(err),
-                            Type = "Error",
-                            Duration = 5
-                        })
-                    end
-                end
-            end)
-            
-            local InputFuncs = {}
-            
-            function InputFuncs:Set(newValue)
-                currentValue = newValue
-                RbxScriptHub.Flags[settings.Flag or GenerateUUID()] = currentValue
-                InputBox.Text = newValue
-                local success, err = pcall(settings.Callback, currentValue)
-                if not success then
-                    RbxScriptHub:Notify({
-                        Title = "Error",
-                        Description = "Input callback error: " .. tostring(err),
-                        Type = "Error",
-                        Duration = 5
-                    })
-                end
-            end
-            
-            return InputFuncs
-        end
-        
-        function Tab:CreateSection(text)
-            local Section = Instance.new("Frame")
-            Section.Name = "Section"
-            Section.Size = UDim2.new(1, 0, 0, 30)
-            Section.BackgroundTransparency = 1
-            Section.Parent = TabContent
-            
-            local SectionLine = Instance.new("Frame")
-            SectionLine.Size = UDim2.new(1, -20, 0, 2)
-            SectionLine.Position = UDim2.new(0, 10, 0.5, -1)
-            SectionLine.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            SectionLine.Parent = Section
-            
-            local SectionLabel = Instance.new("TextLabel")
-            SectionLabel.Name = "Text"
-            SectionLabel.Text = text
-            SectionLabel.Font = Enum.Font.GothamSemibold
-            SectionLabel.TextSize = 12
-            SectionLabel.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            SectionLabel.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            SectionLabel.Size = UDim2.new(0, text:len() * 8, 0, 20)
-            SectionLabel.Position = UDim2.new(0.5, -text:len() * 4, 0.5, -10)
-            SectionLabel.TextXAlignment = Enum.TextXAlignment.Center
-            SectionLabel.Parent = Section
-            
-            local SectionFuncs = {}
-            
-            function SectionFuncs:Set(newText)
-                SectionLabel.Text = newText
-                SectionLabel.Size = UDim2.new(0, newText:len() * 8, 0, 20)
-                SectionLabel.Position = UDim2.new(0.5, -newText:len() * 4, 0.5, -10)
-            end
-            
-            return SectionFuncs
-        end
-        
-        function Tab:CreateProgressBar(settings)
-            local ProgressBar = Instance.new("Frame")
-            ProgressBar.Name = settings.Name or "ProgressBar"
-            ProgressBar.Size = UDim2.new(1, 0, 0, 40)
-            ProgressBar.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementBackground
-            ProgressBar.Parent = TabContent
-            
-            local UICorner = Instance.new("UICorner")
-            UICorner.CornerRadius = UDim.new(0, 6)
-            UICorner.Parent = ProgressBar
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Color = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].ElementStroke
-            UIStroke.Thickness = 1
-            UIStroke.Parent = ProgressBar
-            
-            local Title = Instance.new("TextLabel")
-            Title.Name = "Title"
-            Title.Text = settings.Name or "ProgressBar"
-            Title.Font = Enum.Font.Gotham
-            Title.TextSize = 12
-            Title.TextColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].TextColor
-            Title.BackgroundTransparency = 1
-            Title.Size = UDim2.new(1, -20, 0, 20)
-            Title.Position = UDim2.new(0, 10, 0, 5)
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = ProgressBar
-            
-            local Bar = Instance.new("Frame")
-            Bar.Name = "Bar"
-            Bar.Size = UDim2.new(1, -20, 0, 10)
-            Bar.Position = UDim2.new(0, 10, 0, 25)
-            Bar.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].SliderBackground
-            Bar.Parent = ProgressBar
-            
-            local UICorner2 = Instance.new("UICorner")
-            UICorner2.CornerRadius = UDim.new(0, 5)
-            UICorner2.Parent = Bar
-            
-            local Fill = Instance.new("Frame")
-            Fill.Name = "Fill"
-            Fill.Size = UDim2.new(settings.CurrentValue or 0, 0, 1, 0)
-            Fill.BackgroundColor3 = RbxScriptHub.Themes[RbxScriptHub.CurrentTheme].Accent
-            Fill.Parent = Bar
-            
-            local UICorner3 = Instance.new("UICorner")
-            UICorner3.CornerRadius = UDim.new(0, 5)
-            UICorner3.Parent = Fill
-            
-            local ProgressFuncs = {}
-            
-            function ProgressFuncs:Set(newValue)
-                newValue = math.clamp(newValue, 0, 1)
-                TweenService:Create(Fill, TweenInfo.new(0.2), {
-                    Size = UDim2.new(newValue, 0, 1, 0)
-                }):Play()
-            end
-            
-            return ProgressFuncs
-        end
-        
-        return Tab
-    end
-    
-    return Window
+-- Window Creation
+function RBXScriptHubLib:CreateWindow(settings)
+	local window = {}
+	configurationEnabled = settings.ConfigurationSaving and settings.ConfigurationSaving.Enabled
+	configurationFileName = settings.ConfigurationSaving and settings.ConfigurationSaving.FileName
+
+	-- Initialize UI
+	RBXScriptHubLib.UI, RBXScriptHubLib.Main, RBXScriptHubLib.Topbar, RBXScriptHubLib.Elements, RBXScriptHubLib.Notifications, RBXScriptHubLib.HideButton = createUI()
+	RBXScriptHubLib.Topbar.Title.Text = settings.Name or "RBXScriptHub"
+	makeDraggable(RBXScriptHubLib.Main)
+
+	-- Hide Functionality
+	local function hide()
+		if debounce then return end
+		debounce = true
+		hidden = true
+		TweenService:Create(RBXScriptHubLib.Main, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 400, 0, 0)}):Play()
+		task.wait(0.5)
+		RBXScriptHubLib.Main.Visible = false
+		debounce = false
+		RBXScriptHubLib:Notify("Interface Hidden", "Press K to show the interface.", 7)
+	end
+
+	local function show()
+		if debounce then return end
+		debounce = true
+		hidden = false
+		RBXScriptHubLib.Main.Visible = true
+		TweenService:Create(RBXScriptHubLib.Main, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 400, 0, 300)}):Play()
+		task.wait(0.5)
+		debounce = false
+	end
+
+	RBXScriptHubLib.HideButton.MouseButton1Click:Connect(function()
+		if hidden then show() else hide() end
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if input.KeyCode == Enum.KeyCode.K and not processed then
+			if hidden then show() else hide() end
+		end
+	end)
+
+	-- Tab Creation
+	function window:CreateTab(tabSettings)
+		local tab = {}
+		local tabButton = Instance.new("TextButton")
+		tabButton.Size = UDim2.new(0, 100, 0, 30)
+		tabButton.Position = UDim2.new(0, 110, 0, 5)
+		tabButton.BackgroundColor3 = currentTheme.ElementBackground
+		tabButton.Text = tabSettings.Name
+		tabButton.TextColor3 = currentTheme.TextColor
+		tabButton.TextSize = 14
+		tabButton.Font = Enum.Font.SourceSans
+		tabButton.Parent = RBXScriptHubLib.Topbar
+
+		local tabPage = Instance.new("Frame")
+		tabPage.Size = UDim2.new(1, 0, 1, 0)
+		tabPage.BackgroundTransparency = 1
+		tabPage.Visible = false
+		tabPage.Parent = RBXScriptHubLib.Elements
+
+		local tabLayout = Instance.new("UIListLayout")
+		tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		tabLayout.Padding = UDim.new(0, 5)
+		tabLayout.Parent = tabPage
+
+		tabButton.MouseButton1Click:Connect(function()
+			for _, page in ipairs(RBXScriptHubLib.Elements:GetChildren()) do
+				if page:IsA("Frame") then
+					page.Visible = (page == tabPage)
+				end
+			end
+		end)
+
+		-- Button Element
+		function tab:CreateButton(buttonSettings)
+			local button = Instance.new("TextButton")
+			button.Size = UDim2.new(1, -10, 0, 30)
+			button.BackgroundColor3 = currentTheme.ElementBackground
+			button.Text = buttonSettings.Name
+			button.TextColor3 = currentTheme.TextColor
+			button.TextSize = 14
+			button.Font = Enum.Font.SourceSans
+			button.Parent = tabPage
+
+			local UICorner = Instance.new("UICorner")
+			UICorner.CornerRadius = UDim.new(0, 4)
+			UICorner.Parent = button
+
+			button.MouseEnter:Connect(function()
+				TweenService:Create(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = currentTheme.ElementBackgroundHover}):Play()
+			end)
+
+			button.MouseLeave:Connect(function()
+				TweenService:Create(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = currentTheme.ElementBackground}):Play()
+			end)
+
+			button.MouseButton1Click:Connect(function()
+				local success, err = pcall(buttonSettings.Callback)
+				if not success then
+					RBXScriptHubLib:Notify("Callback Error", "Button callback failed: " .. err)
+				end
+			end)
+		end
+
+		-- Toggle Element
+		function tab:CreateToggle(toggleSettings)
+			local toggle = {}
+			toggle.CurrentValue = toggleSettings.CurrentValue or false
+			toggle.Callback = toggleSettings.Callback or function() end
+			toggle.Flag = toggleSettings.Flag
+
+			local toggleFrame = Instance.new("Frame")
+			toggleFrame.Size = UDim2.new(1, -10, 0, 30)
+			toggleFrame.BackgroundColor3 = currentTheme.ElementBackground
+			toggleFrame.Parent = tabPage
+
+			local UICorner = Instance.new("UICorner")
+			UICorner.CornerRadius = UDim.new(0, 4)
+			UICorner.Parent = toggleFrame
+
+			local title = Instance.new("TextLabel")
+			title.Size = UDim2.new(1, -50, 1, 0)
+			title.Position = UDim2.new(0, 10, 0, 0)
+			title.BackgroundTransparency = 1
+			title.Text = toggleSettings.Name
+			title.TextColor3 = currentTheme.TextColor
+			title.TextSize = 14
+			title.Font = Enum.Font.SourceSans
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.Parent = toggleFrame
+
+			local switch = Instance.new("Frame")
+			switch.Size = UDim2.new(0, 40, 0, 20)
+			switch.Position = UDim2.new(1, -45, 0.5, -10)
+			switch.BackgroundColor3 = toggle.CurrentValue and currentTheme.ToggleEnabled or currentTheme.ToggleDisabled
+			switch.Parent = toggleFrame
+
+			local switchCorner = Instance.new("UICorner")
+			switchCorner.CornerRadius = UDim.new(0, 10)
+			switchCorner.Parent = switch
+
+			toggleFrame.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					toggle.CurrentValue = not toggle.CurrentValue
+					TweenService:Create(switch, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = toggle.CurrentValue and currentTheme.ToggleEnabled or currentTheme.ToggleDisabled}):Play()
+					local success, err = pcall(toggle.Callback, toggle.CurrentValue)
+					if not success then
+						RBXScriptHubLib:Notify("Callback Error", "Toggle callback failed: " .. err)
+					end
+					if toggle.Flag then
+						flags[toggle.Flag] = toggle
+						saveConfiguration()
+					end
+				end
+			end)
+
+			function toggle:Set(value)
+				toggle.CurrentValue = value
+				TweenService:Create(switch, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = toggle.CurrentValue and currentTheme.ToggleEnabled or currentTheme.ToggleDisabled}):Play()
+				local success, err = pcall(toggle.Callback, toggle.CurrentValue)
+				if not success then
+					RBXScriptHubLib:Notify("Callback Error", "Toggle callback failed: " .. err)
+				end
+				if toggle.Flag then
+					saveConfiguration()
+				end
+			end
+
+			if toggle.Flag then
+				flags[toggle.Flag] = toggle
+			end
+
+			return toggle
+		end
+
+		-- Slider Element
+		function tab:CreateSlider(sliderSettings)
+			local slider = {}
+			slider.CurrentValue = sliderSettings.CurrentValue or sliderSettings.Range[1]
+			slider.Callback = sliderSettings.Callback or function() end
+			slider.Flag = sliderSettings.Flag
+			slider.Range = sliderSettings.Range
+			slider.Increment = sliderSettings.Increment or 1
+			slider.Suffix = sliderSettings.Suffix
+
+			local sliderFrame = Instance.new("Frame")
+			sliderFrame.Size = UDim2.new(1, -10, 0, 50)
+			sliderFrame.BackgroundColor3 = currentTheme.ElementBackground
+			sliderFrame.Parent = tabPage
+
+			local UICorner = Instance.new("UICorner")
+			UICorner.CornerRadius = UDim.new(0, 4)
+			UICorner.Parent = sliderFrame
+
+			local title = Instance.new("TextLabel")
+			title.Size = UDim2.new(1, -10, 0, 20)
+			title.Position = UDim2.new(0, 5, 0, 5)
+			title.BackgroundTransparency = 1
+			title.Text = sliderSettings.Name
+			title.TextColor3 = currentTheme.TextColor
+			title.TextSize = 14
+			title.Font = Enum.Font.SourceSans
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.Parent = sliderFrame
+
+			local sliderBar = Instance.new("Frame")
+			sliderBar.Size = UDim2.new(1, -20, 0, 10)
+			sliderBar.Position = UDim2.new(0, 10, 0, 30)
+			sliderBar.BackgroundColor3 = currentTheme.SliderBackground
+			sliderBar.Parent = sliderFrame
+
+			local sliderProgress = Instance.new("Frame")
+			sliderProgress.Size = UDim2.new((slider.CurrentValue - slider.Range[1]) / (slider.Range[2] - slider.Range[1]), 0, 1, 0)
+			sliderProgress.BackgroundColor3 = currentTheme.SliderProgress
+			sliderProgress.Parent = sliderBar
+
+			local valueLabel = Instance.new("TextLabel")
+			valueLabel.Size = UDim2.new(0, 50, 0, 20)
+			valueLabel.Position = UDim2.new(1, -60, 0, 5)
+			valueLabel.BackgroundTransparency = 1
+			valueLabel.Text = tostring(slider.CurrentValue) .. (slider.Suffix or "")
+			valueLabel.TextColor3 = currentTheme.TextColor
+			valueLabel.TextSize = 12
+			valueLabel.Font = Enum.Font.SourceSans
+			valueLabel.Parent = sliderFrame
+
+			local dragging = false
+			sliderBar.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = true
+				end
+			end)
+
+			sliderBar.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = false
+				end
+			end)
+
+			UserInputService.InputChanged:Connect(function(input)
+				if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+					local mouseX = input.Position.X
+					local barX = sliderBar.AbsolutePosition.X
+					local barWidth = sliderBar.AbsoluteSize.X
+					local t = math.clamp((mouseX - barX) / barWidth, 0, 1)
+					local newValue = slider.Range[1] + t * (slider.Range[2] - slider.Range[1])
+					newValue = math.floor(newValue / slider.Increment + 0.5) * slider.Increment
+					slider.CurrentValue = newValue
+					sliderProgress.Size = UDim2.new(t, 0, 1, 0)
+					valueLabel.Text = tostring(newValue) .. (slider.Suffix or "")
+					local success, err = pcall(slider.Callback, newValue)
+					if not success then
+						RBXScriptHubLib:Notify("Callback Error", "Slider callback failed: " .. err)
+					end
+					if slider.Flag then
+						flags[slider.Flag] = slider
+						saveConfiguration()
+					end
+				end
+			end)
+
+			function slider:Set(value)
+				value = math.clamp(value, slider.Range[1], slider.Range[2])
+				slider.CurrentValue = value
+				local t = (value - slider.Range[1]) / (slider.Range[2] - slider.Range[1])
+				TweenService:Create(sliderProgress, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Size = UDim2.new(t, 0, 1, 0)}):Play()
+				valueLabel.Text = tostring(value) .. (slider.Suffix or "")
+				local success, err = pcall(slider.Callback, value)
+				if not success then
+					RBXScriptHubLib:Notify("Callback Error", "Slider callback failed: " .. err)
+				end
+				if slider.Flag then
+					saveConfiguration()
+				end
+			end
+
+			if slider.Flag then
+				flags[slider.Flag] = slider
+			end
+
+			return slider
+		end
+
+		return tab
+	end
+
+	-- Load Configuration
+	task.delay(2, loadConfiguration)
+
+	return window
 end
 
-return RbxScriptHub
+-- Public Methods
+function RBXScriptHubLib:SetVisibility(visible)
+	if visible then
+		RBXScriptHubLib.Main.Visible = true
+		TweenService:Create(RBXScriptHubLib.Main, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 400, 0, 300)}):Play()
+		hidden = false
+	else
+		TweenService:Create(RBXScriptHubLib.Main, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 400, 0, 0)}):Play()
+		task.wait(0.5)
+		RBXScriptHubLib.Main.Visible = false
+		hidden = true
+	end
+end
+
+function RBXScriptHubLib:IsVisible()
+	return not hidden
+end
+
+function RBXScriptHubLib:Destroy()
+	if RBXScriptHubLib.UI then
+		RBXScriptHubLib.UI:Destroy()
+	end
+end
+
+return RBXScriptHubLib
