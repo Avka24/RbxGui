@@ -3555,7 +3555,7 @@ Library.Functions:AddToRegistery(KeybindLabel, {TextColor3="Text"})
 Library.Functions:MakeDraggable(KeybindOuter, 25);
 local WatermarkOuter = Library.Functions:Create('Frame', {
     BorderSizePixel=0;
-    Position = UDim2.new(0, 20, 0, 500);
+    Position = UDim2.new(0, 20, 0, 400);
     Size = UDim2.new(0, 20, 0, 20);
     ZIndex = 200;
     Visible = false;
