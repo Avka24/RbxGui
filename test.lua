@@ -3520,16 +3520,7 @@ local KeybindTopInvis = Library.Functions:Create('Frame', {
     Visible = true;
     Parent = KeybindOuter;
 })
-local KeybindLabel = Library.Functions:Create("TextLabel",{
-    Position = UDim2.new(0, 0, 0, 0);
-    Size = UDim2.new(1, 0, 0, 15);
-    Text = "RbxScript";
-    TextSize = 15;
-    BackgroundTransparency=1;
-    TextXAlignment = Enum.TextXAlignment.Center;
-    ZIndex = 202;
-    Parent = KeybindOuter;
-});
+
 local List = Library.Functions:Create('Frame', {
     BorderSizePixel=0;
     Position = UDim2.new(0, 5, 0, 17);
