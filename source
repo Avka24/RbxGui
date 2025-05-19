@@ -1,0 +1,473 @@
+--[[
+Modern GUI Library
+by [Your Name]
+
+Inspired by Rayfield Interface Suite
+]]
+
+local ModernUILibrary = {
+    Themes = {
+        Dark = {
+            Background = Color3.fromRGB(25, 25, 25),
+            Topbar = Color3.fromRGB(34, 34, 34),
+            TextColor = Color3.fromRGB(240, 240, 240),
+            Accent = Color3.fromRGB(0, 146, 214),
+            ElementBackground = Color3.fromRGB(35, 35, 35),
+            ElementStroke = Color3.fromRGB(50, 50, 50),
+            ToggleOn = Color3.fromRGB(0, 146, 214),
+            ToggleOff = Color3.fromRGB(100, 100, 100),
+            SliderBackground = Color3.fromRGB(43, 105, 159),
+            InputBackground = Color3.fromRGB(30, 30, 30)
+        },
+        Light = {
+            Background = Color3.fromRGB(240, 240, 240),
+            Topbar = Color3.fromRGB(220, 220, 220),
+            TextColor = Color3.fromRGB(50, 50, 50),
+            Accent = Color3.fromRGB(0, 120, 215),
+            ElementBackground = Color3.fromRGB(220, 220, 220),
+            ElementStroke = Color3.fromRGB(180, 180, 180),
+            ToggleOn = Color3.fromRGB(0, 120, 215),
+            ToggleOff = Color3.fromRGB(160, 160, 160),
+            SliderBackground = Color3.fromRGB(0, 120, 215),
+            InputBackground = Color3.fromRGB(255, 255, 255)
+        }
+    },
+    Flags = {}
+}
+
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Main GUI
+local ModernUI = Instance.new("ScreenGui")
+ModernUI.Name = "ModernUI"
+ModernUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+if syn and syn.protect_gui then
+    syn.protect_gui(ModernUI)
+end
+ModernUI.Parent = CoreGui
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "Main"
+MainFrame.Size = UDim2.new(0, 500, 0, 450)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = ModernUILibrary.Themes.Dark.Background
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ModernUI
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+local TopBar = Instance.new("Frame")
+TopBar.Name = "Topbar"
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = ModernUILibrary.Themes.Dark.Topbar
+TopBar.Parent = MainFrame
+
+local UICorner2 = Instance.new("UICorner")
+UICorner2.CornerRadius = UDim.new(0, 8)
+UICorner2.Parent = TopBar
+
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Text = "Modern UI"
+Title.Font = Enum.Font.GothamSemibold
+Title.TextSize = 14
+Title.TextColor3 = ModernUILibrary.Themes.Dark.TextColor
+Title.BackgroundTransparency = 1
+Title.Size = UDim2.new(0, 100, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+local CloseButton = Instance.new("ImageButton")
+CloseButton.Name = "Close"
+CloseButton.Image = "rbxassetid://3926305904"
+CloseButton.ImageRectOffset = Vector2.new(924, 724)
+CloseButton.ImageRectSize = Vector2.new(36, 36)
+CloseButton.Size = UDim2.new(0, 20, 0, 20)
+CloseButton.Position = UDim2.new(1, -30, 0.5, -10)
+CloseButton.AnchorPoint = Vector2.new(1, 0.5)
+CloseButton.BackgroundTransparency = 1
+CloseButton.Parent = TopBar
+
+local MinimizeButton = Instance.new("ImageButton")
+MinimizeButton.Name = "Minimize"
+MinimizeButton.Image = "rbxassetid://3926305904"
+MinimizeButton.ImageRectOffset = Vector2.new(964, 284)
+MinimizeButton.ImageRectSize = Vector2.new(36, 36)
+MinimizeButton.Size = UDim2.new(0, 20, 0, 20)
+MinimizeButton.Position = UDim2.new(1, -60, 0.5, -10)
+MinimizeButton.AnchorPoint = Vector2.new(1, 0.5)
+MinimizeButton.BackgroundTransparency = 1
+MinimizeButton.Parent = TopBar
+
+local TabContainer = Instance.new("Frame")
+TabContainer.Name = "TabContainer"
+TabContainer.Size = UDim2.new(1, -20, 0, 30)
+TabContainer.Position = UDim2.new(0, 10, 0, 45)
+TabContainer.BackgroundTransparency = 1
+TabContainer.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.Parent = TabContainer
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Size = UDim2.new(1, -20, 1, -85)
+ContentFrame.Position = UDim2.new(0, 10, 0, 80)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+local UIPageLayout = Instance.new("UIPageLayout")
+UIPageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIPageLayout.EasingDirection = Enum.EasingDirection.InOut
+UIPageLayout.EasingStyle = Enum.EasingStyle.Quint
+UIPageLayout.TweenTime = 0.5
+UIPageLayout.Parent = ContentFrame
+
+-- Dragging functionality
+local Dragging, DragInput, MousePos, FramePos
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = true
+        MousePos = input.Position
+        FramePos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+            end
+        end)
+    end
+end)
+
+TopBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        DragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == DragInput and Dragging then
+        local Delta = input.Position - MousePos
+        TweenService:Create(MainFrame, TweenInfo.new(0.1), {
+            Position = UDim2.new(FramePos.X.Scale, FramePos.X.Offset + Delta.X, FramePos.Y.Scale, FramePos.Y.Offset + Delta.Y)
+        }):Play()
+    end
+end)
+
+-- Close button functionality
+CloseButton.MouseButton1Click:Connect(function()
+    ModernUI:Destroy()
+end)
+
+-- Minimize button functionality
+local Minimized = false
+MinimizeButton.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    if Minimized then
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+            Size = UDim2.new(0, 500, 0, 40)
+        }):Play()
+    else
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+            Size = UDim2.new(0, 500, 0, 450)
+        }):Play()
+    end
+end)
+
+-- Tab functions
+function ModernUILibrary:CreateWindow(settings)
+    settings = settings or {}
+    Title.Text = settings.Name or "Modern UI"
+    
+    local Window = {}
+    
+    function Window:CreateTab(name, icon)
+        local TabButton = Instance.new("TextButton")
+        TabButton.Name = name
+        TabButton.Text = name
+        TabButton.Font = Enum.Font.Gotham
+        TabButton.TextSize = 12
+        TabButton.TextColor3 = ModernUILibrary.Themes.Dark.TextColor
+        TabButton.BackgroundColor3 = ModernUILibrary.Themes.Dark.ElementBackground
+        TabButton.AutoButtonColor = false
+        TabButton.Size = UDim2.new(0, 80, 1, 0)
+        
+        local UICorner = Instance.new("UICorner")
+        UICorner.CornerRadius = UDim.new(0, 6)
+        UICorner.Parent = TabButton
+        
+        TabButton.Parent = TabContainer
+        
+        local TabContent = Instance.new("ScrollingFrame")
+        TabContent.Name = name
+        TabContent.Size = UDim2.new(1, 0, 1, 0)
+        TabContent.BackgroundTransparency = 1
+        TabContent.ScrollBarThickness = 3
+        TabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        TabContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+        TabContent.ScrollingDirection = Enum.ScrollingDirection.Y
+        TabContent.Parent = ContentFrame
+        
+        local UIListLayout = Instance.new("UIListLayout")
+        UIListLayout.Padding = UDim.new(0, 10)
+        UIListLayout.Parent = TabContent
+        
+        local firstTab = #ContentFrame:GetChildren() == 1
+        
+        TabButton.MouseButton1Click:Connect(function()
+            UIPageLayout:JumpTo(TabContent)
+        end)
+        
+        if firstTab then
+            UIPageLayout:JumpTo(TabContent)
+            TabButton.BackgroundColor3 = ModernUILibrary.Themes.Dark.Accent
+        end
+        
+        local Tab = {}
+        
+        function Tab:CreateButton(settings)
+            local Button = Instance.new("Frame")
+            Button.Name = settings.Name or "Button"
+            Button.Size = UDim2.new(1, 0, 0, 40)
+            Button.BackgroundColor3 = ModernUILibrary.Themes.Dark.ElementBackground
+            Button.Parent = TabContent
+            
+            local UICorner = Instance.new("UICorner")
+            UICorner.CornerRadius = UDim.new(0, 6)
+            UICorner.Parent = Button
+            
+            local UIStroke = Instance.new("UIStroke")
+            UIStroke.Color = ModernUILibrary.Themes.Dark.ElementStroke
+            UIStroke.Thickness = 1
+            UIStroke.Parent = Button
+            
+            local Title = Instance.new("TextLabel")
+            Title.Name = "Title"
+            Title.Text = settings.Name or "Button"
+            Title.Font = Enum.Font.Gotham
+            Title.TextSize = 12
+            Title.TextColor3 = ModernUILibrary.Themes.Dark.TextColor
+            Title.BackgroundTransparency = 1
+            Title.Size = UDim2.new(1, -20, 1, 0)
+            Title.Position = UDim2.new(0, 10, 0, 0)
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+            Title.Parent = Button
+            
+            local ButtonEffect = Instance.new("TextButton")
+            ButtonEffect.Name = "ButtonEffect"
+            ButtonEffect.Text = ""
+            ButtonEffect.BackgroundTransparency = 1
+            ButtonEffect.Size = UDim2.new(1, 0, 1, 0)
+            ButtonEffect.Parent = Button
+            
+            ButtonEffect.MouseButton1Click:Connect(function()
+                local success, err = pcall(settings.Callback)
+                if not success then
+                    warn("Button callback error:", err)
+                end
+            end)
+            
+            ButtonEffect.MouseEnter:Connect(function()
+                TweenService:Create(Button, TweenInfo.new(0.2), {
+                    BackgroundColor3 = Color3.fromRGB(
+                        ModernUILibrary.Themes.Dark.ElementBackground.R * 255 + 10,
+                        ModernUILibrary.Themes.Dark.ElementBackground.G * 255 + 10,
+                        ModernUILibrary.Themes.Dark.ElementBackground.B * 255 + 10
+                    )
+                }):Play()
+            end)
+            
+            ButtonEffect.MouseLeave:Connect(function()
+                TweenService:Create(Button, TweenInfo.new(0.2), {
+                    BackgroundColor3 = ModernUILibrary.Themes.Dark.ElementBackground
+                }):Play()
+            end)
+            
+            local ButtonFuncs = {}
+            
+            function ButtonFuncs:Set(newText)
+                Title.Text = newText
+            end
+            
+            return ButtonFuncs
+        end
+        
+        function Tab:CreateToggle(settings)
+            local Toggle = Instance.new("Frame")
+            Toggle.Name = settings.Name or "Toggle"
+            Toggle.Size = UDim2.new(1, 0, 0, 40)
+            Toggle.BackgroundColor3 = ModernUILibrary.Themes.Dark.ElementBackground
+            Toggle.Parent = TabContent
+            
+            local UICorner = Instance.new("UICorner")
+            UICorner.CornerRadius = UDim.new(0, 6)
+            UICorner.Parent = Toggle
+            
+            local UIStroke = Instance.new("UIStroke")
+            UIStroke.Color = ModernUILibrary.Themes.Dark.ElementStroke
+            UIStroke.Thickness = 1
+            UIStroke.Parent = Toggle
+            
+            local Title = Instance.new("TextLabel")
+            Title.Name = "Title"
+            Title.Text = settings.Name or "Toggle"
+            Title.Font = Enum.Font.Gotham
+            Title.TextSize = 12
+            Title.TextColor3 = ModernUILibrary.Themes.Dark.TextColor
+            Title.BackgroundTransparency = 1
+            Title.Size = UDim2.new(0.7, -10, 1, 0)
+            Title.Position = UDim2.new(0, 10, 0, 0)
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+            Title.Parent = Toggle
+            
+            local ToggleFrame = Instance.new("Frame")
+            ToggleFrame.Name = "ToggleFrame"
+            ToggleFrame.Size = UDim2.new(0, 40, 0, 20)
+            ToggleFrame.Position = UDim2.new(1, -50, 0.5, -10)
+            ToggleFrame.AnchorPoint = Vector2.new(1, 0.5)
+            ToggleFrame.BackgroundColor3 = settings.CurrentValue and ModernUILibrary.Themes.Dark.ToggleOn or ModernUILibrary.Themes.Dark.ToggleOff
+            ToggleFrame.Parent = Toggle
+            
+            local UICorner2 = Instance.new("UICorner")
+            UICorner2.CornerRadius = UDim.new(0, 10)
+            UICorner2.Parent = ToggleFrame
+            
+            local ToggleButton = Instance.new("Frame")
+            ToggleButton.Name = "ToggleButton"
+            ToggleButton.Size = UDim2.new(0, 16, 0, 16)
+            ToggleButton.Position = UDim2.new(1, -18, 0.5, -8)
+            ToggleButton.AnchorPoint = Vector2.new(1, 0.5)
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            ToggleButton.Parent = ToggleFrame
+            
+            local UICorner3 = Instance.new("UICorner")
+            UICorner3.CornerRadius = UDim.new(0, 8)
+            UICorner3.Parent = ToggleButton
+            
+            local ToggleEffect = Instance.new("TextButton")
+            ToggleEffect.Name = "ToggleEffect"
+            ToggleEffect.Text = ""
+            ToggleEffect.BackgroundTransparency = 1
+            ToggleEffect.Size = UDim2.new(1, 0, 1, 0)
+            ToggleEffect.Parent = Toggle
+            
+            local currentValue = settings.CurrentValue or false
+            
+            if currentValue then
+                ToggleButton.Position = UDim2.new(1, -18, 0.5, -8)
+                ToggleFrame.BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOn
+            else
+                ToggleButton.Position = UDim2.new(0, 2, 0.5, -8)
+                ToggleFrame.BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOff
+            end
+            
+            ToggleEffect.MouseButton1Click:Connect(function()
+                currentValue = not currentValue
+                
+                if currentValue then
+                    TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+                        Position = UDim2.new(1, -18, 0.5, -8)
+                    }):Play()
+                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
+                        BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOn
+                    }):Play()
+                else
+                    TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+                        Position = UDim2.new(0, 2, 0.5, -8)
+                    }):Play()
+                    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {
+                        BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOff
+                    }):Play()
+                end
+                
+                local success, err = pcall(settings.Callback, currentValue)
+                if not success then
+                    warn("Toggle callback error:", err)
+                end
+            end)
+            
+            ToggleEffect.MouseEnter:Connect(function()
+                TweenService:Create(Toggle, TweenInfo.new(0.2), {
+                    BackgroundColor3 = Color3.fromRGB(
+                        ModernUILibrary.Themes.Dark.ElementBackground.R * 255 + 10,
+                        ModernUILibrary.Themes.Dark.ElementBackground.G * 255 + 10,
+                        ModernUILibrary.Themes.Dark.ElementBackground.B * 255 + 10
+                    )
+                }):Play()
+            end)
+            
+            ToggleEffect.MouseLeave:Connect(function()
+                TweenService:Create(Toggle, TweenInfo.new(0.2), {
+                    BackgroundColor3 = ModernUILibrary.Themes.Dark.ElementBackground
+                }):Play()
+            end)
+            
+            local ToggleFuncs = {}
+            
+            function ToggleFuncs:Set(newValue)
+                currentValue = newValue
+                
+                if currentValue then
+                    ToggleButton.Position = UDim2.new(1, -18, 0.5, -8)
+                    ToggleFrame.BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOn
+                else
+                    ToggleButton.Position = UDim2.new(0, 2, 0.5, -8)
+                    ToggleFrame.BackgroundColor3 = ModernUILibrary.Themes.Dark.ToggleOff
+                end
+                
+                local success, err = pcall(settings.Callback, currentValue)
+                if not success then
+                    warn("Toggle callback error:", err)
+                end
+            end
+            
+            return ToggleFuncs
+        end
+        
+        function Tab:CreateLabel(text)
+            local Label = Instance.new("Frame")
+            Label.Name = "Label"
+            Label.Size = UDim2.new(1, 0, 0, 30)
+            Label.BackgroundTransparency = 1
+            Label.Parent = TabContent
+            
+            local TextLabel = Instance.new("TextLabel")
+            TextLabel.Name = "Text"
+            TextLabel.Text = text
+            TextLabel.Font = Enum.Font.Gotham
+            TextLabel.TextSize = 12
+            TextLabel.TextColor3 = ModernUILibrary.Themes.Dark.TextColor
+            TextLabel.BackgroundTransparency = 1
+            TextLabel.Size = UDim2.new(1, -20, 1, 0)
+            TextLabel.Position = UDim2.new(0, 10, 0, 0)
+            TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+            TextLabel.Parent = Label
+            
+            local LabelFuncs = {}
+            
+            function LabelFuncs:Set(newText)
+                TextLabel.Text = newText
+            end
+            
+            return LabelFuncs
+        end
+        
+        return Tab
+    end
+    
+    return Window
+end
+
+return ModernUILibrary
