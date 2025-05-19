@@ -3523,7 +3523,7 @@ local KeybindTopInvis = Library.Functions:Create('Frame', {
 local KeybindLabel = Library.Functions:Create("TextLabel",{
     Position = UDim2.new(0, 0, 0, 0);
     Size = UDim2.new(1, 0, 0, 15);
-    Text = "Keybinds";
+    Text = "RbxScript";
     TextSize = 15;
     BackgroundTransparency=1;
     TextXAlignment = Enum.TextXAlignment.Center;
@@ -3556,7 +3556,7 @@ Library.Functions:MakeDraggable(KeybindOuter, 25);
 local WatermarkOuter = Library.Functions:Create('Frame', {
     BorderSizePixel=0;
     Position = UDim2.new(0, 100, 0, -25);
-    Size = UDim2.new(0, 213, 0, 20);
+    Size = UDim2.new(0, 20, 0, 20);
     ZIndex = 200;
     Visible = false;
     Parent = ScreenGui;
