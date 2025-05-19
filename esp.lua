@@ -26,7 +26,6 @@ local SettingsTable = {
 	HealthText = {Enabled=false,Color=Color3.fromRGB(255, 255, 255),UseHealthColor=false};
 	ItemDistances = {Enabled = true,Color = Color3.fromRGB(255,255,255),Conversion="m"};
 	ItemNames= {Enabled=true,Color=Color3.fromRGB(255,255,255)};
-	ItemBoxes = {Enabled = true, Outline = true, Filled = true, Color = Color3.fromRGB(255, 255, 255), FilledColor = Color3.fromRGB(0, 0, 0)};
 	GeneralSettings = {TextSize=11,IgnoreHumanoid=false,RenderDistance=1000,ItemRenderDistance=1000};
 	IgnoreList={};ObjectIgnoreList={};
 	ItemCache={};PlayerCache={};
@@ -126,6 +125,8 @@ function Functions:GetTool(Player)
 	end
 	return "None"
 end
+
+
 
 do
 	local ScreenGui = Functions:Create("ScreenGui", {Parent = CoreGui, Name = "ScreenEsp"})
@@ -307,17 +308,19 @@ do
 						v.Hide()
 					end
 				else
-					v.FilledBox:Destroy()
-					v.Name:Destroy()
-					v.Distance:Destroy()
-					v.Tools:Destroy()
-					v.OuterHealthBar:Destroy()
-					v.HealthText:Destroy()
-					if v.SleepingText ~= nil then
-						v.SleepingText:Destroy()
-					end
-					table.remove(PlayerCache,table.find(PlayerCache,Model))
+					v.Hide()
 				end
+			else
+				v.FilledBox:Destroy()
+				v.Name:Destroy()
+				v.Distance:Destroy()
+				v.Tools:Destroy()
+				v.OuterHealthBar:Destroy()
+				v.HealthText:Destroy()
+				if v.SleepingText ~= nil then
+					v.SleepingText:Destroy()
+				end
+				table.remove(PlayerCache,table.find(PlayerCache,Model))
 			end
 		end
 	end)
@@ -331,30 +334,20 @@ do
 		if ItemEspData[Model] then return end
 
 		local Drawings = {}
-		Drawings.FilledBox = Functions:Create("Frame", {Parent = ScreenGui,BackgroundColor3 = Color3.fromRGB(0, 0, 0),BackgroundTransparency = 0.75,BorderSizePixel = 0})
-		Drawings.OutlineBox = Functions:Create("Frame", {Parent = Drawings.FilledBox,BackgroundColor3 = Color3.fromRGB(0, 0, 0),BackgroundTransparency = 0.75,BorderSizePixel = 0})
-		Drawings.InnerBox = Functions:Create("UIStroke", {Parent = Drawings.FilledBox, Transparency = 0, Color = Color3.fromRGB(0, 0, 0), LineJoinMode = Enum.LineJoinMode.Miter,Thickness=2})
-		Drawings.OuterBox = Functions:Create("UIStroke", {Parent = Drawings.OutlineBox, Transparency = 0, Color = Color3.fromRGB(255, 255, 255), LineJoinMode = Enum.LineJoinMode.Miter,Thickness=1})
 		Drawings.Name = Functions:Create("TextLabel", {Parent = ScreenGui, Size = UDim2.new(0, 50, 0, 20), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.Code, TextSize = SettingsTable.GeneralSettings.TextSize, TextStrokeTransparency = 0, TextStrokeColor3 = Color3.fromRGB(0, 0, 0)})
 		Drawings.Distance = Functions:Create("TextLabel", {Parent = ScreenGui, Size = UDim2.new(0, 50, 0, 20), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.Code, TextSize = SettingsTable.GeneralSettings.TextSize, TextStrokeTransparency = 0, TextStrokeColor3 = Color3.fromRGB(0, 0, 0)})
 		Drawings.Data = Data
-		function Drawings.Hide()
-			Drawings.FilledBox.Visible = false
+		function Drawings.Hide(args)
 			Drawings.Name.Visible = false
-			Drawing
-s.Distance.Visible = false
+			Drawings.Distance.Visible = false
 		end
-		ItemEspList[Model] = {NameText=Drawings.Name,DistanceText=Drawings.Distance,Data=Drawings.Data,FilledBox=Drawings.FilledBox,OutlineBox=Drawings.OutlineBox,InnerBox=Drawings.InnerBox,OuterBox=Drawings.OuterBox}
+		ItemEspList[Model] = {NameText=Drawings.Name,DistanceText=Drawings.Distance,Data=Drawings.Data}
 		ItemEspData[Model] = Drawings
 
 		function Drawings.RemoveItemEsp(Model)
 			if not ItemEspList[Model] then return end
 			ItemEspList[Model].NameText:Destroy()
 			ItemEspList[Model].DistanceText:Destroy()
-			ItemEspList[Model].FilledBox:Destroy()
-			ItemEspList[Model].OutlineBox:Destroy()
-			ItemEspList[Model].InnerBox:Destroy()
-			ItemEspList[Model].OuterBox:Destroy()
 			ItemEspList[Model] = nil
 			ItemEspData[Model] = nil
 			table.remove(ItemCache,table.find(ItemCache,Model))
@@ -366,7 +359,6 @@ s.Distance.Visible = false
 			local Model = i
 			if ScreenGui ~= nil and Model ~= nil and Model:IsDescendantOf(game:GetService("Workspace"))then
 				local Position, OnScreen = Camera:WorldToScreenPoint(Model:GetPivot().p)
-				local left, right, top, bottom = Functions:GetBoundingBox(Model)
 				local distance = LocalPlayer:DistanceFromCharacter(Model:GetPivot().p)
 	
 				if SettingsTable.GeneralSettings.IgnoreHumanoid then
@@ -374,39 +366,20 @@ s.Distance.Visible = false
 				end
 	
 				if distance <= SettingsTable.GeneralSettings.ItemRenderDistance and OnScreen and not table.find(SettingsTable.ObjectIgnoreList,Model) then
-					do --Boxes
-						v.FilledBox.Position = UDim2.new(0, left, 0, top)
-						if SettingsTable.ItemBoxes.Enabled then
-							v.FilledBox.Size = UDim2.new(0, right-left, 0, bottom-top)
-							v.OutlineBox.Size = UDim2.new(1, 0, 1, 0)
-							v.OutlineBox.Position = UDim2.new(0, 0, 0, 0)
-							v.OutlineBox.BackgroundTransparency = 1
-							v.FilledBox.Visible = true
-							v.FilledBox.BackgroundColor3 = SettingsTable.ItemBoxes.FilledColor
-							v.OuterBox.Color = SettingsTable.ItemBoxes.Color
-							if SettingsTable.ItemBoxes.Filled == true then
-								v.FilledBox.BackgroundTransparency = 0.75
-							else
-								v.FilledBox.BackgroundTransparency = 1
-							end
-						else
-							v.FilledBox.Visible = false
-						end
-					end
 					do --Names/Distances
 						if SettingsTable.ItemNames.Enabled then
 							v.Name.Text = v.Data["Name"]
 							v.Name.Visible = true
-							v.Name.Position = UDim2.new(0, v.FilledBox.Position.X.Offset+v.FilledBox.Size.X.Offset/2, 0, v.FilledBox.Position.Y.Offset - v.Name.TextBounds.Y / 1.5)
+							v.Name.Position = UDim2.new(0, Position.X, 0, Position.Y)
 							v.Name.TextColor3 = SettingsTable.ItemNames.Color
 						else
 							if v.Name ~= nil then v.Name.Visible = false end
 						end
 						if SettingsTable.ItemDistances.Enabled then
 							if SettingsTable.ItemNames.Enabled then
-								v.Distance.Position = UDim2.new(0, v.FilledBox.Position.X.Offset+v.FilledBox.Size.X.Offset/2, 0, v.FilledBox.Position.Y.Offset + v.FilledBox.Size.Y.Offset + v.Distance.TextBounds.Y / 1.5)
+								v.Distance.Position = UDim2.new(0, Position.X, 0, Position.Y + 11)
 							else
-								v.Distance.Position = UDim2.new(0, v.FilledBox.Position.X.Offset+v.FilledBox.Size.X.Offset/2, 0, v.FilledBox.Position.Y.Offset + v.FilledBox.Size.Y.Offset + v.Distance.TextBounds.Y / 1.5)
+								v.Distance.Position = UDim2.new(0, Position.X, 0, Position.Y)
 							end
 							v.Distance.Text = math.floor(distance/Conversions[SettingsTable.Distances.Conversion]).." ("..SettingsTable.Distances.Conversion..")"
 							v.Distance.Visible = true
@@ -421,10 +394,6 @@ s.Distance.Visible = false
 			else
 				v.Name:Destroy()
 				v.Distance:Destroy()
-				v.FilledBox:Destroy()
-				v.OutlineBox:Destroy()
-				v.InnerBox:Destroy()
-				v.OuterBox:Destroy()
 				table.remove(ItemCache,table.find(ItemCache,Model))
 			end
 		end
