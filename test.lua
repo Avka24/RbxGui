@@ -3502,15 +3502,6 @@ local NotificationUiList = Library.Functions:Create('UIListLayout',{
     SortOrder = Enum.SortOrder.LayoutOrder,
     Parent = NotificationHolder,
 });
-local KeybindOuter = Library.Functions:Create('Frame', {
-    BorderSizePixel=0;
-    AnchorPoint = Vector2.new(0, 0.5);
-    Position = UDim2.new(0, 10, 0.5, 0);
-    Size = UDim2.new(0, 200, 0, 23);
-    ZIndex = 200;
-    Visible = true;
-    Parent = ScreenGui;
-})
 local KeybindTopInvis = Library.Functions:Create('Frame', {
     BorderSizePixel=0;
     Position = UDim2.new(0, 0, 0, 0);
