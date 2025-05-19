@@ -3554,8 +3554,9 @@ Library.Functions:AddToRegistery(KeybindOuterStroke, {Color="Active"})
 Library.Functions:AddToRegistery(KeybindLabel, {TextColor3="Text"})
 Library.Functions:MakeDraggable(KeybindOuter, 25);
 local WatermarkOuter = Library.Functions:Create('Frame', {
-    BorderSizePixel=0;
-    Position = UDim2.new(0, 20, 0, 400);
+    BorderSizePixel = 0;
+    Position = UDim2.new(0.5, 0, 0, 20); -- Tengah secara horizontal, 20px dari atas
+    AnchorPoint = Vector2.new(0.5, 0);   -- Titik acuan di tengah atas
     Size = UDim2.new(0, 20, 0, 20);
     ZIndex = 200;
     Visible = false;
